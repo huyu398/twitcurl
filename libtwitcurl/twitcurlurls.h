@@ -38,6 +38,15 @@ namespace twitCurlDefaults
     const std::string TWITCURL_STRINGIFY_IDS = "stringify_ids=";
     const std::string TWITCURL_INREPLYTOSTATUSID = "in_reply_to_status_id=";
 
+    const std::string TWITCURL_DELIMIT = "delimited=";
+    const std::string TWITCURL_STALLWARN = "stall_warnings=";
+    const std::string TWITCURL_WITH = "with=";
+    const std::string TWITCURL_REPLIES = "replies=";
+    const std::string TWITCURL_FOLLOW = "follow=";
+    const std::string TWITCURL_TRACK = "track=";
+    const std::string TWITCURL_LOCATIONS = "locations=";
+    const std::string TWITCURL_USERAGENT = "User-Agent: ";
+
     /* URL separators */
     const std::string TWITCURL_URL_SEP_AMP = "&";
     const std::string TWITCURL_URL_SEP_QUES = "?";
@@ -115,6 +124,10 @@ namespace twitterDefaults
     const std::string TWITCURL_TRENDSWEEKLY_URL = TWITCURL_BASE_URL + "trends/weekly";
     const std::string TWITCURL_TRENDSAVAILABLE_URL = TWITCURL_BASE_URL + "trends/available";
 
+    /* Streaming API URLs */
+    const std::string TWITCURL_USERSTREAM_URL = "userstream.twitter.com/1.1/user";
+    const std::string TWITCURL_PUBLICFILTERSTREAM_URL = "stream.twitter.com/1.1/statuses/filter";
+    const std::string TWITCURL_PUBLICSAMPLESTREAM_URL = "stream.twitter.com/1.1/statuses/sample";
 };
 
 namespace oAuthLibDefaults

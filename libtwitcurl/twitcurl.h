@@ -8,6 +8,8 @@
 #include "oauthlib.h"
 #include "include/curl/curl.h"
 
+class twitCurl;
+
 /* Few common types used by twitCurl */
 namespace twitCurlTypes
 {
@@ -24,6 +26,9 @@ namespace twitCurlTypes
         eTwitCurlProtocolHttp,
         eTwitCurlProtocolMax
     } eTwitCurlProtocolType;
+
+    typedef void ( *fpStreamApiCallback )( std::string &data, twitCurl* pTwitCurlObj, void *userdata );
+
 };
 
 /* twitCurl class */
@@ -139,6 +144,12 @@ public:
     void setProxyUserName( const std::string& proxyUserName /* in */ );
     void setProxyPassword( const std::string& proxyPassword /* in */ );
 
+    /* Streaming APIs */
+    bool UserStreamingApi( std::string with="", std::string replies="", std::string follow="", std::string track="", std::string locations="", bool accept_encoding=true, bool stall_warnings=false ); /* all parameters in */
+    bool PublicFilterStreamingApi( std::string follow="", std::string track="", std::string locations="", bool accept_encoding=true, bool stall_warnings=false ); /* all parameters in */
+    bool PublicSampleStreamingApi( bool accept_encoding=true, bool stall_warnings=false );
+    void SetStreamApiCallback( twitCurlTypes::fpStreamApiCallback func, void *userdata );
+
     /* cURL Interface APIs */
     std::string& getInterface();
     void setInterface( const std::string& Interface /* in */ );
@@ -177,6 +188,11 @@ private:
     /* OAuth data */
     oAuth m_oAuth;
 
+    /* Streaming API data */
+    unsigned int m_curchunklength;
+    twitCurlTypes::fpStreamApiCallback m_streamapicallback;
+    void *m_streamapicallback_data;
+
     /* Private methods */
     void clearCurlCallbackBuffers();
     void prepareCurlProxy();
@@ -189,9 +205,12 @@ private:
                              const std::string& oAuthHttpHeader );
     bool performDelete( const std::string& deleteUrl );
     bool performPost( const std::string& postUrl, std::string dataStr = "" );
+    bool PostStreamingApiGeneric( std::string streamurl, std::string with, std::string replies, std::string follow , std::string track, std::string locations, bool accept_encoding, bool stall_warnings );
+    void StreamingApiGenericPrepare( bool accept_encoding );
 
     /* Internal cURL related methods */
     static int curlCallback( char* data, size_t size, size_t nmemb, twitCurl* pTwitCurlObj );
+    static int curlStreamingCallback( char* data, size_t size, size_t nmemb, twitCurl* pTwitCurlObj );
 };
 
 

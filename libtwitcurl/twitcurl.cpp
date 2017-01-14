@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include <memory.h>
+#include <cstdlib>
 #include "twitcurlurls.h"
 #include "twitcurl.h"
 #include "urlencode.h"
@@ -21,7 +22,9 @@ m_curlLoginParamsSet( false ),
 m_curlCallbackParamsSet( false ),
 m_curlInterfaseParamSet ( false ),
 m_eApiFormatType( twitCurlTypes::eTwitCurlApiFormatJson ),
-m_eProtocolType( twitCurlTypes::eTwitCurlProtocolHttps )
+m_eProtocolType( twitCurlTypes::eTwitCurlProtocolHttps ),
+m_streamapicallback( 0 ),
+m_streamapicallback_data( 0 )
 {
     /* Alloc memory for cURL error responses */
     m_errorBuffer = (char*)malloc( twitCurlDefaults::TWITCURL_DEFAULT_BUFFSIZE );
@@ -1519,18 +1522,241 @@ bool twitCurl::trendsAvailableGet()
                        twitCurlDefaults::TWITCURL_EXTENSIONFORMATS[m_eApiFormatType] );
 }
 
+bool twitCurl::UserStreamingApi( std::string with, std::string replies, std::string follow , std::string track, std::string locations, bool accept_encoding, bool stall_warnings )
+{
+    return PostStreamingApiGeneric( twitterDefaults::TWITCURL_USERSTREAM_URL, with, replies, follow, track, locations, accept_encoding, stall_warnings );
+}
+
 /*++
-* @method: twitCurl::getLastWebResponse
+* @method: twitCurl::PublicFilterStreamingApi
 *
-* @description: method to get http response for the most recent request sent.
-*               twitcurl users need to call this method and parse the XML
-*               data returned by twitter to see what has happened.
+* @description: Retrieves public tweets matching a number of filters
 *
-* @input: outWebResp - string in which twitter's response is supplied back to caller
+* @input: Various optional filter criteria, whether to send an accept_encoding header, and whether to be sent stall warnings
 *
 * @output: none
 *
 *--*/
+bool twitCurl::PublicFilterStreamingApi( std::string follow , std::string track, std::string locations, bool accept_encoding, bool stall_warnings )
+{
+    return PostStreamingApiGeneric( twitterDefaults::TWITCURL_PUBLICFILTERSTREAM_URL, "", "", follow, track, locations, accept_encoding, stall_warnings );
+}
+
+/*++
+* @method: twitCurl::PublicSampleStreamingApi
+*
+* @description: Retrieves a sample of public tweets
+*
+* @input: whether to send an accept_encoding header, and whether to be sent stall warnings
+*
+* @output: none
+*
+*--*/
+bool twitCurl::PublicSampleStreamingApi( bool accept_encoding, bool stall_warnings )
+{
+    std::string streamurl = twitterDefaults::TWITCURL_PUBLICSAMPLESTREAM_URL + twitCurlDefaults::TWITCURL_URL_SEP_QUES + twitCurlDefaults::TWITCURL_DELIMIT;
+    if( stall_warnings )
+    {
+        streamurl += twitCurlDefaults::TWITCURL_URL_SEP_AMP + twitCurlDefaults::TWITCURL_STALLWARN;
+    }
+    StreamingApiGenericPrepare( accept_encoding );
+
+    bool retval = performGet( streamurl );
+
+    /* So that future requests don't unwittingly use the wrong handler */
+    m_curlCallbackParamsSet = false;
+
+    return retval;
+
+}
+
+/*++
+* @method: twitCurl::PostStreamingApiGeneric
+*
+* @description: Some functionality common to all POST method streaming API functions
+*
+* @input: various optinal fields, and whether to send an accept_encoding header
+*
+* @output: none
+*
+* @remarks: internal method
+*
+*--*/
+bool twitCurl::PostStreamingApiGeneric( std::string streamurl, std::string with, std::string replies, std::string follow , std::string track, std::string locations, bool accept_encoding, bool stall_warnings )
+{
+    std::string postdata = twitCurlDefaults::TWITCURL_DELIMIT;
+    if( stall_warnings )
+    {
+        postdata += twitCurlDefaults::TWITCURL_URL_SEP_AMP + twitCurlDefaults::TWITCURL_STALLWARN;
+    }
+    if( with.size() )
+    {
+        postdata += twitCurlDefaults::TWITCURL_URL_SEP_AMP + twitCurlDefaults::TWITCURL_WITH + with;
+    }
+    if( replies.size() )
+    {
+        postdata += twitCurlDefaults::TWITCURL_URL_SEP_AMP + twitCurlDefaults::TWITCURL_REPLIES + replies;
+    }
+    if( follow.size() )
+    {
+        postdata += twitCurlDefaults::TWITCURL_URL_SEP_AMP + twitCurlDefaults::TWITCURL_FOLLOW + follow;
+    }
+    if( track.size() )
+    {
+        postdata += twitCurlDefaults::TWITCURL_URL_SEP_AMP + twitCurlDefaults::TWITCURL_TRACK + track;
+    }
+    if( locations.size() )
+    {
+        postdata += twitCurlDefaults::TWITCURL_URL_SEP_AMP + twitCurlDefaults::TWITCURL_LOCATIONS + locations;
+    }
+
+    StreamingApiGenericPrepare( accept_encoding );
+
+    bool retval = performPost( streamurl, postdata );
+
+    /* So that future requests don't unwittingly use the wrong handler */
+    m_curlCallbackParamsSet = false;
+
+    return retval;
+}
+
+/*++
+* @method: twitCurl::StreamingApiGenericPrepare
+*
+* @description: Some functionality common to all streaming API functions
+*
+* @input: whether to send an accept_encoding header
+*
+* @output: none
+*
+* @remarks: internal method
+*
+*--*/
+void twitCurl::StreamingApiGenericPrepare( bool accept_encoding )
+{
+    if( accept_encoding )
+    {
+        /* Send accept encoding header to enable compressed streams */
+        curl_easy_setopt( m_curlHandle, CURLOPT_ACCEPT_ENCODING, "" );
+
+        /* Twitter requires a non-empty user-agent for compressed streams */
+        curl_easy_setopt( m_curlHandle, CURLOPT_USERAGENT, twitCurlDefaults::TWITCURL_USERAGENT.c_str() );
+    }
+
+    /* So that we don't override the streaming api read handler */
+    m_curlCallbackParamsSet = true;
+
+    /* Set buffer to get error */
+    curl_easy_setopt( m_curlHandle, CURLOPT_ERRORBUFFER, m_errorBuffer );
+
+    /* Set callback function to get response */
+    curl_easy_setopt( m_curlHandle, CURLOPT_WRITEFUNCTION, curlStreamingCallback );
+    curl_easy_setopt( m_curlHandle, CURLOPT_WRITEDATA, this );
+
+    /* Stream does not start in a chunk */
+    m_curchunklength = 0;
+}
+
+/*++
+* @method: twitCurl::curlStreamingCallback
+*
+* @description: static method to get http response back from cURL.
+*               this is an internal method, users of twitcurl need not
+*               use this.
+*               Version for streaming API (with delimeters)
+*
+* @input: as per cURL convention.
+*
+* @output: size of data stored in our buffer
+*
+* @remarks: internal method
+*
+*--*/
+int twitCurl::curlStreamingCallback( char* data, size_t size, size_t nmemb, twitCurl* pTwitCurlObj )
+{
+    int writtenSize = 0;
+    if( ( NULL != pTwitCurlObj ) && ( NULL != data ) )
+    {
+        /* Save http response in twitcurl object's buffer */
+        writtenSize = pTwitCurlObj->saveLastWebResponse( data, ( size*nmemb ) );
+
+        while( true ) {
+            if( pTwitCurlObj->m_curchunklength )
+            {
+                if( pTwitCurlObj->m_callbackData.length() >= pTwitCurlObj->m_curchunklength )
+                {
+                    /* Splice off m_curchunklength bytes into new string */
+                    std::string streamevent = pTwitCurlObj->m_callbackData.substr( 0, pTwitCurlObj->m_curchunklength );
+                    pTwitCurlObj->m_callbackData = pTwitCurlObj->m_callbackData.substr( pTwitCurlObj->m_curchunklength );
+                    if( pTwitCurlObj->m_streamapicallback )
+                    {
+                        (*pTwitCurlObj->m_streamapicallback)( streamevent, pTwitCurlObj, pTwitCurlObj->m_streamapicallback_data );
+                    }
+                    pTwitCurlObj->m_curchunklength = 0;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+                std::string::size_type pos = pTwitCurlObj->m_callbackData.find( "\r\n" );
+                if( pos == 0 )
+                {
+                    /* Chop off empty line (used as a keep-alive) */
+                    pTwitCurlObj->m_callbackData = pTwitCurlObj->m_callbackData.substr( 2 );
+                }
+                else if( pos == std::string::npos )
+                {
+                    /* Newline not found, keep reading */
+                    break;
+                }
+                else
+                {
+                    /* Newline found at non-zero offset, must be a number */
+                    /* pTwitCurlObj->m_curchunklength = std::stoul( pTwitCurlObj->m_callbackData ); */ /* This is C++11 */
+                    pTwitCurlObj->m_curchunklength = std::atoi( pTwitCurlObj->m_callbackData.c_str() );
+                    pTwitCurlObj->m_callbackData = pTwitCurlObj->m_callbackData.substr( 2 + pos );
+                }
+            }
+        }
+    }
+    return writtenSize;
+}
+
+
+/*++
+* @method: twitCurl::SetStreamApiCallback
+*
+* @description: method to set the callback used to process each streaming API event as it arrives.
+*               this must be called before starting a streaming API request, otherwise data will be discarded.
+*
+* @input: callback function of type twitCurlTypes::fpStreamApiCallback
+*         pointer to pass to callback's third argument
+*
+* @output: none
+*
+*--*/
+void twitCurl::SetStreamApiCallback( twitCurlTypes::fpStreamApiCallback func, void *userdata )
+{
+    m_streamapicallback_data = userdata;
+    m_streamapicallback = func;
+}
+
+
+/*++
+ @method: twitCurl::getLastWebResponse
+
+ @description: method to get http response for the most recent request sent.
+               twitcurl users need to call this method and parse the XML
+               data returned by twitter to see what has happened.
+
+ @input: outWebResp - string in which twitter's response is supplied back to caller
+
+ @output: none
+
+--*/
 void twitCurl::getLastWebResponse( std::string& outWebResp )
 {
     outWebResp = "";
